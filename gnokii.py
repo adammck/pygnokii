@@ -64,6 +64,7 @@ class Gnokii:
 		self.notifier = None
 		self.reader = None
 		self.quit = None
+		self.buffer = []
 	
 	
 	# start watching for new sms messages
@@ -96,7 +97,8 @@ class Gnokii:
 			# danger, will robinson!
 			msg = "Gnokii.start_reader called " +\
 			      "when reader was not None"
-			raise(Warning, msg)
+			print msg
+			raise(Warning)
 		
 		# start a new gnokii in a new thread
 		self.reader = self.SmsReader()
@@ -114,29 +116,50 @@ class Gnokii:
 	def shutdown(self): self.stop_reader()
 	
 	
-	def send(self, dest, msg):
-		print "Sending to %s: %s"\
-			% (dest, msg)
-		
-		# temporaily stop smsreader
-		# (it blocks gnkii sending)
-		self.stop_reader()
-		
-		# send the sms via a new gnokii process
+	def send(self, dest, msg, buffer=False):
+		if buffer:
+			self.buffer.append((dest, msg))
+			return True
+			
+		# if the reader is currently running,
+		# then stop it, send, and re-start it
+		elif self.reader != None:
+			self.stop_reader()
+			r = self._send(dest, msg)
+			self.start_reader()
+			return r
+			
+		# if no reader is running, then
+		# sending is really simple...
+		else: return self._send(dest, msg)
+	
+	# 
+	def _send(self, dest, msg):
 		out, err = Popen(["gnokii --sendsms $0", dest], **pargs).communicate(msg)
 		sent = (err.find("Send succeeded!") > 0)
+		time.sleep(0.5)
+	
+
+	def flush(self):
+		print "Flushing %d messages" % (len(self.buffer))
+		self.stop_reader()
 		
-		# create a new smsreader process,
-		# and return the boolean status
+		# send each message in
+		# order of receipt
+		for tuple in self.buffer:
+			dest, msg = tuple
+			self._send(dest, msg)
+		
 		self.start_reader()
-		return sent
+		self.buffer = []
 
 
 
 
 gnokii = None
 
-def SmsSender(username, password, server="localhost", port=13013):
+# args are inherited from pykannel, but aren't needed for gnokii
+def SmsSender(username=None, password=None, server="localhost", port=13013):
 	global gnokii
 	if not gnokii:
 		gnokii = Gnokii()
@@ -153,21 +176,27 @@ def SmsReceiver(receiver):
 
 if __name__ == "__main__":
 	
+	dest = raw_input("Please enter a phone number to receive SMS: ").strip()
+	sender = SmsSender()
+	if sender.send(dest, "So i herd u liek mudkips"):
+		print "Message sent"
+	
 	def iGotAnSMS(caller, msg):
 		print "%s says: %s" % (caller, msg)
-		sent = g.send(caller, "Thanks for those %d characters!" % len(msg))
+		sent = sender.send(caller, "Thanks for those %d characters!" % len(msg))
 	
-	# fire up gnokii to wait for
-	# incomming messages
-	g = Gnokii(iGotAnSMS)
-	print "Waiting for SMS..."
-	g.run()
+	# fire up gnokii to wait
+	# for incomming messages
+	print "Waiting for incomming SMS..."
+	receiver = SmsReceiver(iGotAnSMS)
+	receiver.run()
 	
 	try:
-		# block until ctrl+c
-		while True: time.sleep(1)
-		
+		# block until interrupt
+		while True:
+			time.sleep(1)
+	
 	except KeyboardInterrupt:
 		print "Shutting Down..."
-		g.shutdown()
+		receiver.shutdown()
 
