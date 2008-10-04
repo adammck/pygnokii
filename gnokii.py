@@ -40,10 +40,7 @@ class Gnokii:
 			except OSError: pass 
 	
 	
-	class SmsNotifier(ProcessEvent):
-		def my_init(self, receiver):
-			self.receiver = receiver
-	
+	class _SmsNotifier(ProcessEvent):
 		def process_IN_CREATE(self, event):
 			m = re.compile("^sms_(\d+)_").match(event.name)
 			if m is not None:
@@ -57,6 +54,16 @@ class Gnokii:
 				# invoke the eventual receiver, providing
 				# the senders number and the message
 				self.receiver(m.group(1), message)
+	
+	
+	class SmsNotifier(_SmsNotifier):
+		def my_init(self, receiver):
+			self.receiver = receiver
+		
+	
+	class OldSmsNotifier(_SmsNotifier):
+		def __init__(self, receiver):
+			self.receiver = receiver
 	
 	
 	def __init__(self, receiver=None):
@@ -84,10 +91,18 @@ class Gnokii:
 			# THIS IS ALWAYS MONITORING, EVEN WHEN
 			# GNOKII IS NOT IN SMSREADER MODE
 			wm = WatchManager()
-			self.notifier = ThreadedNotifier(
-				wm, self.SmsNotifier(Stats(),
-				receiver=self.receiver))
-			wm.add_watch(sms_dir, IN_CREATE)
+			try:
+				self.notifier = ThreadedNotifier(
+					wm, self.SmsNotifier(Stats(),
+					receiver=self.receiver))
+				wm.add_watch(sms_dir, IN_CREATE)
+			# this will fail with a NameError if we are using an
+			# older version (< 0.8) of pyinotify, so we catch it and use
+			# the class for backwards compatibility
+			except NameError:
+				self.notifier = ThreadedNotifier(
+					wm, self.OldSmsNotifier(receiver=self.receiver))
+				wm.add_watch(sms_dir, EventsCodes.IN_CREATE)
 			self.notifier.setDaemon(True)
 			self.notifier.start()
 	
