@@ -193,7 +193,7 @@ if __name__ == "__main__":
 	
 	dest = raw_input("Please enter a phone number to receive SMS: ").strip()
 	sender = SmsSender()
-	if sender.send(dest, "So i herd u liek mudkips"):
+	if sender.send(dest, "Hello world! -pygnokii"):
 		print "Message sent"
 	
 	def iGotAnSMS(caller, msg):
