@@ -202,7 +202,7 @@ if __name__ == "__main__":
 	
 	# fire up gnokii to wait
 	# for incomming messages
-	print "Waiting for incomming SMS..."
+	print "Waiting for incoming SMS..."
 	receiver = SmsReceiver(iGotAnSMS)
 	receiver.run()
 	
